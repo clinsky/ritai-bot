@@ -39,3 +39,7 @@ IN_IMG_NAME = 'in.png'
 OUT_IMG_NAME = 'out.png'
 
 HELP_COMMAND = ''
+
+# Bot connection options
+SUCCESSFUL_CONNECTION = 'success'
+FAILED_CONNECTION = 'failed'

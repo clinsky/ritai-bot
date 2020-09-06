@@ -1,4 +1,4 @@
 import os
 from bot import bot
 
-bot.main()
+bot.main(run_discord_port=True)
