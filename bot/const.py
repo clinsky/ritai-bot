@@ -32,6 +32,7 @@ DEFAULT_PATH    = CWD / 'images' / 'default'
 # bot.py
 RTM_READ_DELAY  = 2 # second delay between reading from RTM
 MENTION_REGEX = '^<@(|[WU].+?)>(.*)'
+MENTION_REGEX_DISCORD = '<@!(.\\d+)>(.*)'
 
 # command.py
 DEFAULT_IMG_NAME = 'default.png'
