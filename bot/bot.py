@@ -17,6 +17,9 @@ import abc
 # additional libraries
 from slackclient import SlackClient
 
+import discord
+from discord.ext import commands
+
 # project-specific libraries
 from .skill.help import help
 from .skill.mnist import mnist
@@ -43,10 +46,6 @@ class _AbstractBotPort(abc.ABC):
         self.bot_token = bot_token
 
     @abc.abstractmethod
-    def main(self):
-        raise NotImplementedError
-
-    @abc.abstractmethod
     def parse_direct_mention(self):
         raise NotImplementedError
 
@@ -60,6 +59,10 @@ class _AbstractBotPort(abc.ABC):
 
     @abc.abstractmethod
     def download_attached_image(self):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def post_error(self, error, client):
         raise NotImplementedError
 
     def log(self, s):
@@ -119,33 +122,85 @@ class _AbstractBotPort(abc.ABC):
             with open(str(const.LOG_PATH / 'elog.txt'), 'a') as elog:
                 elog.write('[%s]: %s\n' % (time.strftime(TIME_FORMAT, time.localtime()), prompt))
                 elog.write('[%s]: %s\n' % (time.strftime(TIME_FORMAT, time.localtime()), err))
-            post_error(err, info[const.INFO_CLIENT])
+            self.post_error(err, info[const.INFO_CLIENT])
             self.log(err)
             Help.error()
 
+    @abc.abstractmethod
+    def main(self):
+        raise NotImplementedError
 
 class DiscordBotPort(_AbstractBotPort):
+
     def __init__(self, bot_token):
         super().__init__(bot_token=bot_token)
+        self.client = discord.Client()
+        # Binds callback functions to 'on_ready' and 'on_message'
+        self.on_ready = self.client.event(self.on_ready)
+        self.on_message = self.client.event(self.on_message)
 
-    def parse_direct_mention(self):
+        self.main()
+
+    def get_connection_status(self):
+        return self.connection_status
+
+    def parse_direct_mention(self, message_text):
+        '''
+        Finds a direct mention (a mention that is at the beginning) in message text
+        and returns the user ID which was mentioned. If there is no direct mention,
+        returns None
+        '''
+        matches = re.search(const.MENTION_REGEX_DISCORD, message_text)
+        # the first group contains the username
+        # the second group contains the remaining message
+        if matches:
+            return (matches.group(1), matches.group(2).strip())
+        else:
+            return (None, None)
+    
+    def parse_bot_commands(self):
         pass
 
     def download_attached_image(self):
         pass
 
-    def main(self):
+    def post_error(self, error, client):
         pass
-
-    def launch_bot(self):
-        pass
-
-    def parse_bot_commands(self):
-        pass
-
+    
     def log(self, s):
         '''More informative print debugging'''
         super().log("Discord Port | " + s)
+
+    async def on_ready(self):
+        '''
+        Gets called when bot connects successfully
+        '''
+        self.connection_status = const.SUCCESSFUL_CONNECTION
+        self.bot_ID = str(self.client.user.id) 
+        self.log('ritai-bot connected and running!')
+
+    async def on_message(self, message):
+        '''
+        Gets called whenever a message gets sent in the server
+        '''
+        ID, message = self.parse_direct_mention(message.content)
+        if ID == self.bot_ID:
+            self.log('I have been mentioned!')      #@TODO Placeholder code for now
+
+    def launch_bot(self):
+        '''
+        Starts the discord bot
+        @NOTE This method is blocking
+        '''
+        try:
+            self.client.run(self.bot_token)
+        except:
+            traceback.print_exc()
+            self.log('Connection failed. Exception traceback printed above.')
+            self.connection_status = const.FAILED_CONNECTION
+
+    def main(self):
+        self.launch_bot()
 
 
 class SlackBotPort(_AbstractBotPort):
@@ -155,71 +210,7 @@ class SlackBotPort(_AbstractBotPort):
 
     def get_connection_status(self):
         return self.connection_status
-
-    def log(self, s):
-        '''More informative print debugging'''
-        super().log("Slack Port | " + s)
-
-    def post_error(self, error, client):
-        '''Posts stack trace to a channel dedicated to bot maintenance'''
-        channels = client.api_call(method='conversations.list', exclude_archived=1)['channels']
-        if channels:
-            elog_channel = None
-            for channel in channels:
-                if channel['name'] == ELOG_CHANNEL:
-                    elog_channel = channel['id']
-                    break
-            if not elog_channel:
-                self.log('WARNING: No channel in which to log errors!')
-
-            error = '```\n' + error + '```'  # makes it look fancy, I think
-
-            client.api_call(
-                'chat.postMessage',
-                channel=elog_channel,
-                text=error,
-            )
-
-    def download_attached_image(img_url, bot_token):
-        '''Downloads an image from a url'''
-        # sometimes slack packages urls in messages in brackets
-        # these will cause an error unless we remove them
-        if img_url[0] == '<':
-            img_url = img_url[1:-1]
-
-        headers = {'Authorization': 'Bearer %s' % bot_token}
-        response = requests.get(img_url, headers=headers)
-
-        if not os.path.isdir(const.TEMP_PATH):
-            os.makedirs(const.TEMP_PATH)
-
-        with open(const.TEMP_PATH / const.IN_IMG_NAME, 'wb') as image:
-            image.write(response.content)
-
-    def parse_bot_commands(self, slack_events, bot_name, bot_token):
-        '''
-        Parses a list of events coming from the Slack RTM API to find bot commands.
-        If a bot prompt is found, this function returns a tuple of prompt and
-        channel. If its not found, then this function returns None, None.
-        '''
-        for event in slack_events:
-            if event['type'] == 'message' and not 'subtype' in event:
-                user_name, message = self.parse_direct_mention(event['text'])
-                if user_name == bot_name:
-                    # download a file if it was present in the message
-                    if 'files' in event:
-                        # file is present
-                        f = event['files'][0]
-                        self.download_attached_image(f['url_private_download'], bot_token)
-                    # reply to the parent thread, not the child thread
-                    if 'thread_ts' in event:
-                        thread = event['thread_ts']
-                    else:
-                        thread = event['ts']
-
-                    return message, event['channel'], thread
-        return None, None, None
-
+    
     def parse_direct_mention(self, message_text):
         '''
         Finds a direct mention (a mention that is at the beginning) in message text
@@ -252,6 +243,70 @@ class SlackBotPort(_AbstractBotPort):
             self.log('Connection failed. Exception traceback printed above.')
             return None, None, const.FAILED_CONNECTION
 
+    def parse_bot_commands(self, slack_events, bot_name, bot_token):
+        '''
+        Parses a list of events coming from the Slack RTM API to find bot commands.
+        If a bot prompt is found, this function returns a tuple of prompt and
+        channel. If its not found, then this function returns None, None.
+        '''
+        for event in slack_events:
+            if event['type'] == 'message' and not 'subtype' in event:
+                user_name, message = self.parse_direct_mention(event['text'])
+                if user_name == bot_name:
+                    # download a file if it was present in the message
+                    if 'files' in event:
+                        # file is present
+                        f = event['files'][0]
+                        self.download_attached_image(f['url_private_download'], bot_token)
+                    # reply to the parent thread, not the child thread
+                    if 'thread_ts' in event:
+                        thread = event['thread_ts']
+                    else:
+                        thread = event['ts']
+
+                    return message, event['channel'], thread
+        return None, None, None
+
+    def download_attached_image(self, img_url, bot_token):
+        '''Downloads an image from a url'''
+        # sometimes slack packages urls in messages in brackets
+        # these will cause an error unless we remove them
+        if img_url[0] == '<':
+            img_url = img_url[1:-1]
+
+        headers = {'Authorization': 'Bearer %s' % bot_token}
+        response = requests.get(img_url, headers=headers)
+
+        if not os.path.isdir(const.TEMP_PATH):
+            os.makedirs(const.TEMP_PATH)
+
+        with open(const.TEMP_PATH / const.IN_IMG_NAME, 'wb') as image:
+            image.write(response.content)
+
+    def post_error(self, error, client):
+        '''Posts stack trace to a channel dedicated to bot maintenance'''
+        channels = client.api_call(method='conversations.list', exclude_archived=1)['channels']
+        if channels:
+            elog_channel = None
+            for channel in channels:
+                if channel['name'] == ELOG_CHANNEL:
+                    elog_channel = channel['id']
+                    break
+            if not elog_channel:
+                self.log('WARNING: No channel in which to log errors!')
+
+            error = '```\n' + error + '```'  # makes it look fancy, I think
+
+            client.api_call(
+                'chat.postMessage',
+                channel=elog_channel,
+                text=error,
+            )
+
+    def log(self, s):
+        '''More informative print debugging'''
+        super().log("Slack Port | " + s)
+
     def main(self):
         # Checking for mentions
         prompt, channel, thread = self.parse_bot_commands(self.client.rtm_read(), self.bot_name, self.bot_token)
@@ -265,6 +320,7 @@ class SlackBotPort(_AbstractBotPort):
             }
             self.handle_prompt(prompt, info)
 
+    
 
 def run_bot_ports(run_discord_port=False, run_slack_port=False):
     bot_ports = []
