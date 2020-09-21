@@ -13,6 +13,7 @@ import time
 import requests
 import traceback
 import abc
+import asyncio
 
 # additional libraries
 from slackclient import SlackClient
@@ -135,7 +136,7 @@ class DiscordBotPort(_AbstractBotPort):
     def __init__(self, bot_token):
         super().__init__(bot_token=bot_token)
         self.client = discord.Client()
-        # Binds callback functions to 'on_ready' and 'on_message'
+        # "Binds" callback functions to 'on_ready' and 'on_message'
         self.on_ready = self.client.event(self.on_ready)
         self.on_message = self.client.event(self.on_message)
 
@@ -161,11 +162,24 @@ class DiscordBotPort(_AbstractBotPort):
     def parse_bot_commands(self):
         pass
 
-    def download_attached_image(self):
-        pass
+    def download_attached_image(self, message):
+        '''Download an image attached to a message'''
+        for attachment in message.attachments:
+            response = requests.get(attachment.url, stream=True)
+
+            if not os.path.isdir(const.TEMP_PATH):
+                os.makedirs(const.TEMP_PATH)
+
+            with open(const.TEMP_PATH / const.IN_IMG_NAME, 'wb') as image:
+                image.write(response.content)
 
     def post_error(self, error, client):
-        pass
+        '''Posts stack trace to a channel dedicated to bot maintenance'''
+        for guild in self.client.guilds:
+            for channel in guild.text_channels:
+                if channel.name == ELOG_CHANNEL:
+                    error = '```\n' + error + '```'
+                    asyncio.create_task(channel.send(error))
     
     def log(self, s):
         '''More informative print debugging'''
@@ -183,9 +197,10 @@ class DiscordBotPort(_AbstractBotPort):
         '''
         Gets called whenever a message gets sent in the server
         '''
-        ID, message = self.parse_direct_mention(message.content)
+        ID, content = self.parse_direct_mention(message.content)
         if ID == self.bot_ID:
-            self.log('I have been mentioned!')      #@TODO Placeholder code for now
+            if(len(message.attachments) != 0):
+                self.download_attached_image(message)
 
     def launch_bot(self):
         '''
@@ -225,23 +240,6 @@ class SlackBotPort(_AbstractBotPort):
         else:
             return (None, None)
 
-    def launch_bot(self):
-        try:
-            # instantiate Slack client
-            client = SlackClient(self.bot_token)
-
-            # try to connect to slack
-            if client.rtm_connect(with_team_state='False'):
-                # Read bot's user ID by calling Web API method `auth.test`
-                bot_name = client.api_call('auth.test')['user_id']
-                # connection is successful
-                self.log('ritai-bot connected and running!')
-                self.client = client
-            return client, bot_name, const.SUCCESSFUL_CONNECTION
-        except:
-            traceback.print_exc()
-            self.log('Connection failed. Exception traceback printed above.')
-            return None, None, const.FAILED_CONNECTION
 
     def parse_bot_commands(self, slack_events, bot_name, bot_token):
         '''
@@ -306,6 +304,24 @@ class SlackBotPort(_AbstractBotPort):
     def log(self, s):
         '''More informative print debugging'''
         super().log("Slack Port | " + s)
+
+    def launch_bot(self):
+        try:
+            # instantiate Slack client
+            client = SlackClient(self.bot_token)
+
+            # try to connect to slack
+            if client.rtm_connect(with_team_state='False'):
+                # Read bot's user ID by calling Web API method `auth.test`
+                bot_name = client.api_call('auth.test')['user_id']
+                # connection is successful
+                self.log('ritai-bot connected and running!')
+                self.client = client
+            return client, bot_name, const.SUCCESSFUL_CONNECTION
+        except:
+            traceback.print_exc()
+            self.log('Connection failed. Exception traceback printed above.')
+            return None, None, const.FAILED_CONNECTION
 
     def main(self):
         # Checking for mentions
