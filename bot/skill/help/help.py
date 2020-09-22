@@ -15,15 +15,16 @@ class SkillHelp(skill.Skill):
 
     def help(self):
         self.respond(
+            '```prolog\n'
             'RITAI VERSION [%s]:\n' % const.VERSION +\
-                '\t@ritai help [command]\n' +\
+                '\t"@ritai help [command]"\n' +\
                 '\t\tprints this message, or more info about a command\n' +\
-                '\t@ritai kmeans\n' +\
+                '\t"@ritai kmeans"\n' +\
                 '\t\tperforms k-means clustering over an image\n' +\
-                '\t@ritai mnist\n' +\
+                '\t"@ritai mnist"\n' +\
                 '\t\tguesses what number is in an image\n' +\
-                '\t@ritai stylize\n' +\
-                '\t\tapplies neural style transfer to an image\n'
+                '\t"@ritai stylize"\n' +\
+                '\t\tapplies neural style transfer to an image\n```'
         )
     
     def execute(self, prompt):

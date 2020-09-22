@@ -87,9 +87,10 @@ class SkillMnist(skill.Skill):
     
     def help(self):
         self.respond(    
-            'usage:\n' +\
-                '\t@ritai mnist <image>\n' +\
-                '\t\tAttach an image and I will guess what number it is!\n'
+            '```prolog\n'
+            'USAGE:\n' +\
+                '\t"@ritai mnist <image>"\n' +\
+                '\t\tAttach an image and I will guess what number it is!\n```'
         )
     
     def execute(self, prompt):

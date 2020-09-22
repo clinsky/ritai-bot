@@ -18,13 +18,14 @@ class SkillStylize(skill.Skill):
     
     def help(self):
         self.respond(
-            'usage:\n' +\
-                '\t@ritai stylize <image>\n' +\
-                '\t\tI will stylize the attached image with a random style.\n' +\
-                '\t@ritai stylize [style] <image>\n' +\
-                '\t\tI will stylize the attached image with a specific style.\n' +\
+            '```prolog\n'
+            'USAGE:\n' +\
+                '\t"@ritai stylize <image>"\n' +\
+                '\t\tstylize the attached image with a random style.\n' +\
+                '\t"@ritai stylize [style] <image>"\n' +\
+                '\t\tstylize the attached image with a specific style.\n' +\
                 '\tNOTE: valid styles include:\n' +\
-                '\t' + str(self.styles) + '\n'
+                '\t' + str(self.styles) + '\n```'
         )
         
     def execute(self, prompt):

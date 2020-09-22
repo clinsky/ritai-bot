@@ -102,11 +102,12 @@ class SkillKmeans(skill.Skill):
 
     def help(self):
         self.respond(
-            'usage:\n' +\
-                '\t@ritai kmeans [k_value] <image>\n' +\
+            '```prolog\n'
+            'USAGE:\n' +\
+                '\t"@ritai kmeans [k_value] <image>"\n' +\
                 '\t\tI will perform k-means color simplification on the attached image.\n' +\
                 '\tNOTE: k_value must be in range [1-10].\n' +\
-                '\tNOTE: If k_value is not an integer, I will choose one randomly.\n'
+                '\tNOTE: if k_value is not an integer, i will choose one randomly.\n```'
         )
     
     def execute(self, prompt):
